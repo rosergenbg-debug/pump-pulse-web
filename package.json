@@ -1,0 +1,11 @@
+{
+  "name": "pump-pulse-market",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "refresh-history": "node scripts/fetch-history.mjs",
+    "validate": "node scripts/validate.mjs"
+  },
+  "displayName": "PUMP Pulse"
+}
