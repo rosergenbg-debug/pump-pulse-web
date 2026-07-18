@@ -13,8 +13,8 @@ const seed="const HISTORY_SEED="+historySeed+";\n";
 const assets="const assets=new Map("+JSON.stringify([
   ["/",{body:html,type:"text/html; charset=utf-8"}],
   ["/index.html",{body:html,type:"text/html; charset=utf-8"}],
-  ["/pulse-v5.css",{body:css,type:"text/css; charset=utf-8"}],
-  ["/pulse-v11.js",{body:js,type:"text/javascript; charset=utf-8"}],
+  ["/pulse-v6.css",{body:css,type:"text/css; charset=utf-8"}],
+  ["/pulse-v12.js",{body:js,type:"text/javascript; charset=utf-8"}],
   ["/robots.txt",{body:robots,type:"text/plain; charset=utf-8"}]
 ])+");\n";
 await rm(dist,{recursive:true,force:true});
