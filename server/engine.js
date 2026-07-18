@@ -88,11 +88,18 @@ function signalAt(pump, ind, i, profile) {
   let exhaustionArmed=false;for(let j=i-11;j<=i;j++)if(ind.drawdown[j]<=-.06&&ind.shockCount[j]>=3)exhaustionArmed=true;
   const confirm=(c.close>=ind.e20[i]&&prev.close<ind.e20[i-1])||(ind.breakout[i]&&r>=55&&rp<55), flow=(ind.spotFlow[i]??-1)>=0;
   const market=(ind.market(i)??-1)>=-.02&&(ind.atr[i]??0)>=.007&&(ind.atr[i]??1)<=.035, limit=profile==="active"?-.03:-.06;
-  const exhaustion=exhaustionArmed&&confirm&&r>=43&&r<=58&&flow&&market&&ind.drawdown[i]<=limit;
-  const stages=[exhaustionArmed,confirm,flow,market].filter(Boolean).length,late=lateRisk(pump,ind,i);
+  const stagePass=[exhaustionArmed&&ind.drawdown[i]<=limit,confirm&&r>=43&&r<=58,flow,market];
+  const exhaustion=stagePass.every(Boolean);
+  const stageScores=[
+    clamp(55*Math.min(1,ind.shockCount[i]/3)+45*Math.min(1,Math.abs(ind.drawdown[i])/Math.abs(limit))),
+    confirm?100:clamp(35+Math.max(0,55-Math.abs(50-r)*5)),
+    clamp(50+100*(ind.spotFlow[i]??-.5)),
+    clamp(50+((ind.market(i)??-.05)+.02)*900)-((ind.atr[i]??0)<.007||(ind.atr[i]??1)>.035?35:0)
+  ];
+  const stages=stagePass.filter(Boolean).length,late=lateRisk(pump,ind,i);
   const blocked=late>=(profile==="active"?70:60)&&(trend||shock||exhaustion), mode=blocked?"NONE":exhaustion?"EXHAUSTION":shock?"SHOCK":trend?"TREND":"NONE";
-  const readiness=mode!=="NONE"?100:blocked?70:Math.min(98,stages*22+(trendArmed||shockArmed?10:0));
-  return {mode,readiness,stages,late,blocked,reason:mode==="TREND"?"RSI recovery and trend confirmation":mode==="SHOCK"?"Recovery after a high-volume shock":mode==="EXHAUSTION"?"Exhaustion, reversal and buyer flow confirmed":blocked?"Late-entry protection":"Waiting for the next complete setup"};
+  const readiness=mode!=="NONE"?100:blocked?70:Math.min(98,Math.round(stageScores.reduce((a,b)=>a+b,0)/4));
+  return {mode,readiness,stages,stagePass,stageScores:stageScores.map(Math.round),late,blocked,threshold:limit*100,details:{shockCount:ind.shockCount[i],drawdown:ind.drawdown[i]*100,confirmation:confirm,rsi:r,spotFlow:(ind.spotFlow[i]??0)*100,marketMove:(ind.market(i)??0)*100,atr:(ind.atr[i]??0)*100},reason:mode==="TREND"?"RSI recovery and trend confirmation":mode==="SHOCK"?"Recovery after a high-volume shock":mode==="EXHAUSTION"?"Exhaustion, reversal and buyer flow confirmed":blocked?"Late-entry protection":"Waiting for the next complete setup"};
 }
 
 function percentile(value, values) { return 100*values.filter(x=>x<=value).length/Math.max(1,values.length); }
@@ -105,18 +112,20 @@ function liveSnapshot(history) {
   const flow=Math.round(clamp(100*(.55*Math.tanh(candleReturn(pump,i,2)/.018)+.25*Math.tanh(candleReturn(pump,i,6)/.035)+.2*(ind.spotFlow[i]||0)),-100,100));
   const agreement=Math.round(clamp(45+Math.abs(flow)*.3+variants.strict.stages*6));
   let breathing="transition";if(variants.strict.late>=65&&flow>10)breathing="lateMove";else if(energy>=65&&flow>=18)breathing="upward";else if(energy>=65&&flow<=-18)breathing="downward";else if(energy<=35&&Math.abs(flow)<=20)breathing="calm";
-  const start=Math.max(0,pump.length-120), chart=[];for(let x=start;x<pump.length;x++)chart.push([pump[x].closeTime,pump[x].close,ind.e20[x]]);
+  const start=Math.max(0,pump.length-1000), chart=[];for(let x=start;x<pump.length;x++)chart.push([pump[x].closeTime,pump[x].close,ind.e20[x]]);
   return {updatedAt:Date.now(),candleTime:pump[i].closeTime,price:pump[i].close,change24:candleReturn(pump,i,48)*100,energy,flow,agreement,breathing,rsi:ind.rs[i]||0,drawdown:ind.drawdown[i]*100,variants,chart};
 }
 
 function runStrategy(history, settings, profile) {
-  const {pump,btc,sol}=history,ind=indicators(pump,btc,sol);let cash=settings.capital,coins=0,totalFees=0,stops=0,wins=0,rounds=0,equity=[cash],events=[],connections=[],cool=-1;
-  for(let i=236;i<pump.length-2;i++){
-    if(i<cool)continue;const sig=signalAt(pump,ind,i,profile);if(sig.mode==="NONE")continue;
-    const entryIndex=i+1,entry=pump[entryIndex],initial=cash,entryPrice=entry.open*(1+settings.slippage),buyFee=cash*settings.buyFee;totalFees+=buyFee;coins=(cash-buyFee)/entryPrice;cash=0;events.push({type:"BUY",time:entry.openTime,price:entryPrice});
+  const {pump,btc,sol}=history,ind=indicators(pump,btc,sol),startTime=Number(settings.startTime)||pump[0].openTime,endTime=Number(settings.endTime)||pump.at(-1).closeTime;
+  const rangeStart=Math.max(236,pump.findIndex(c=>c.closeTime>=startTime)),foundEnd=pump.findLastIndex(c=>c.openTime<=endTime),rangeEnd=foundEnd<0?pump.length-1:foundEnd;
+  let cash=settings.capital,coins=0,totalFees=0,stops=0,wins=0,rounds=0,equity=[cash],events=[],connections=[],cool=-1;
+  for(let i=Math.max(236,rangeStart-1);i<Math.min(pump.length-2,rangeEnd);i++){
+    if(i<cool)continue;const sig=signalAt(pump,ind,i,profile),entryIndex=i+1;if(pump[entryIndex].openTime<startTime||pump[entryIndex].openTime>endTime||sig.mode==="NONE")continue;
+    const entry=pump[entryIndex],initial=cash,entryPrice=entry.open*(1+settings.slippage),buyFee=cash*settings.buyFee;totalFees+=buyFee;coins=(cash-buyFee)/entryPrice;cash=0;events.push({type:"BUY",time:entry.openTime,price:entryPrice});
     const maxHold=sig.mode==="EXHAUSTION"?96:48,first=sig.mode==="EXHAUSTION"?.07:sig.mode==="SHOCK"?.06:.08,partial=sig.mode==="EXHAUSTION"?.4:sig.mode==="SHOCK"?.5:1;
-    let partialTaken=false,highest=entryPrice,partialText="",exitIndex=Math.min(entryIndex+maxHold+1,pump.length-1),exitReason=sig.mode==="EXHAUSTION"?"48-hour limit":"24-hour limit";
-    for(let j=entryIndex;j<=Math.min(entryIndex+maxHold,pump.length-2);j++){
+    let partialTaken=false,highest=entryPrice,partialText="",exitIndex=Math.min(entryIndex+maxHold+1,pump.length-1,rangeEnd),exitReason=sig.mode==="EXHAUSTION"?"48-hour limit":"24-hour limit";
+    for(let j=entryIndex;j<=Math.min(entryIndex+maxHold,pump.length-2,rangeEnd-1);j++){
       const c=pump[j],exec=pump[j+1],stop=entryPrice*(1-.044);equity.push(cash+coins*c.low*(1-settings.slippage)*(1-settings.sellFee));
       if(!partialTaken&&c.low<=stop){exitIndex=j+1;exitReason="Protective stop −4.4%";stops++;break}
       if(!partialTaken&&c.high>=entryPrice*(1+first)){
@@ -129,7 +138,7 @@ function runStrategy(history, settings, profile) {
     const pnl=cash-initial,pct=pnl/initial*100;events.push({type:"SELL",time:exit.openTime,price:exitPrice});connections.push({entry:{time:entry.openTime,price:entryPrice,reason:sig.reason},exit:{time:exit.openTime,price:exitPrice,reason:exitReason},partial:partialText,pnl,pct,duration:exit.openTime-entry.openTime,mode:sig.mode});rounds++;if(pnl>=0)wins++;else if(sig.mode==="EXHAUSTION")cool=exitIndex+12;equity.push(cash);i=exitIndex;
   }
   let peak=equity[0],dd=0;for(const value of equity){peak=Math.max(peak,value);dd=Math.min(dd,value/peak-1)}
-  let curveBalance=settings.capital;const equityCurve=[[pump[0].openTime,curveBalance]];for(const trade of connections){curveBalance+=trade.pnl;equityCurve.push([trade.exit.time,curveBalance])}if(equityCurve.at(-1)[0]!==pump.at(-1).closeTime)equityCurve.push([pump.at(-1).closeTime,cash]);
-  const chart=[],step=Math.max(1,Math.ceil(pump.length/750));for(let i=0;i<pump.length;i+=step)chart.push([pump[i].closeTime,pump[i].close,ind.e20[i]]);if(chart.at(-1)?.[0]!==pump.at(-1).closeTime)chart.push([pump.at(-1).closeTime,pump.at(-1).close,ind.e20.at(-1)]);
-  return {updatedAt:Date.now(),modelVersion:"Android-v2.5-web",from:pump[0].openTime,to:pump.at(-1).closeTime,settings,profile,equity:cash,profit:cash-settings.capital,profitPct:(cash/settings.capital-1)*100,rounds,wins,winRate:rounds?wins/rounds*100:0,maxDd:dd*100,totalFees,stops,events,connections,equityCurve,chart};
+  let curveBalance=settings.capital;const equityCurve=[[startTime,curveBalance]];for(const trade of connections){curveBalance+=trade.pnl;equityCurve.push([trade.exit.time,curveBalance])}if(equityCurve.at(-1)[0]!==endTime)equityCurve.push([endTime,cash]);
+  const selected=pump.slice(Math.max(0,rangeStart),rangeEnd+1),chart=[],step=Math.max(1,Math.ceil(selected.length/1100));for(let i=0;i<selected.length;i+=step){const sourceIndex=Math.max(0,rangeStart)+i;chart.push([pump[sourceIndex].closeTime,pump[sourceIndex].close,ind.e20[sourceIndex]])}if(chart.at(-1)?.[0]!==selected.at(-1)?.closeTime&&selected.length){const sourceIndex=rangeEnd;chart.push([pump[sourceIndex].closeTime,pump[sourceIndex].close,ind.e20[sourceIndex]])}
+  return {updatedAt:Date.now(),modelVersion:"Android-v2.5-web",from:startTime,to:endTime,availableFrom:pump[236]?.openTime||pump[0].openTime,availableTo:pump.at(-1).closeTime,settings,profile,equity:cash,profit:cash-settings.capital,profitPct:(cash/settings.capital-1)*100,rounds,wins,winRate:rounds?wins/rounds*100:0,maxDd:dd*100,totalFees,totalFeePct:totalFees/settings.capital*100,stops,events,connections,equityCurve,chart};
 }
