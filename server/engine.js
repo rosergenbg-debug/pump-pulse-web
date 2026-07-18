@@ -129,6 +129,7 @@ function runStrategy(history, settings, profile) {
     const pnl=cash-initial,pct=pnl/initial*100;events.push({type:"SELL",time:exit.openTime,price:exitPrice});connections.push({entry:{time:entry.openTime,price:entryPrice,reason:sig.reason},exit:{time:exit.openTime,price:exitPrice,reason:exitReason},partial:partialText,pnl,pct,duration:exit.openTime-entry.openTime,mode:sig.mode});rounds++;if(pnl>=0)wins++;else if(sig.mode==="EXHAUSTION")cool=exitIndex+12;equity.push(cash);i=exitIndex;
   }
   let peak=equity[0],dd=0;for(const value of equity){peak=Math.max(peak,value);dd=Math.min(dd,value/peak-1)}
+  let curveBalance=settings.capital;const equityCurve=[[pump[0].openTime,curveBalance]];for(const trade of connections){curveBalance+=trade.pnl;equityCurve.push([trade.exit.time,curveBalance])}if(equityCurve.at(-1)[0]!==pump.at(-1).closeTime)equityCurve.push([pump.at(-1).closeTime,cash]);
   const chart=[],step=Math.max(1,Math.ceil(pump.length/750));for(let i=0;i<pump.length;i+=step)chart.push([pump[i].closeTime,pump[i].close,ind.e20[i]]);if(chart.at(-1)?.[0]!==pump.at(-1).closeTime)chart.push([pump.at(-1).closeTime,pump.at(-1).close,ind.e20.at(-1)]);
-  return {updatedAt:Date.now(),from:pump[0].openTime,to:pump.at(-1).closeTime,settings,profile,equity:cash,profit:cash-settings.capital,profitPct:(cash/settings.capital-1)*100,rounds,wins,winRate:rounds?wins/rounds*100:0,maxDd:dd*100,totalFees,stops,events,connections,chart};
+  return {updatedAt:Date.now(),modelVersion:"Android-v2.5-web",from:pump[0].openTime,to:pump.at(-1).closeTime,settings,profile,equity:cash,profit:cash-settings.capital,profitPct:(cash/settings.capital-1)*100,rounds,wins,winRate:rounds?wins/rounds*100:0,maxDd:dd*100,totalFees,stops,events,connections,equityCurve,chart};
 }
