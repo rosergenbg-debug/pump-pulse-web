@@ -10,7 +10,7 @@ const source = await readFile(resolve(root, "dist/server/index.js"), "utf8");
 const moduleUrl = `data:text/javascript;base64,${Buffer.from(source).toString("base64")}`;
 const worker = await import(moduleUrl);
 assert.equal(typeof worker.default?.fetch, "function");
-for (const [path, type] of [["/", "text/html"], ["/pulse-v7.css", "text/css"], ["/pulse-v13.js", "text/javascript"]]) {
+for (const [path, type] of [["/", "text/html"], ["/pulse-v8.css", "text/css"], ["/pulse-v14.js", "text/javascript"]]) {
   const response = await worker.default.fetch(new Request(`https://example.test${path}`));
   assert.equal(response.status, 200);
   assert.match(response.headers.get("content-type"), new RegExp(type));
