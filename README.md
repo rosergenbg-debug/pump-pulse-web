@@ -6,11 +6,11 @@ Production site: https://pump-pulse-market.serano.chatgpt.site
 
 ## Features
 
-- Live PUMP/EUR market pulse from closed 30-minute candles
+- Server-prepared PUMP/EUR market pulse from closed 30-minute candles
 - Strict and active strategy profiles
 - Activity, flow, agreement and late-entry protection
 - Personalized starting capital, entry fee, exit fee and slippage
-- Automatic six-month historical test with trade cards and chart markers
+- Server-side six-month historical test with cached market history
 - English, German and Turkish interface
 - Private contact form on the production deployment
 - Responsive layout designed for phones first and expanded for desktop
@@ -21,14 +21,17 @@ PUMP Pulse is an experimental research assistant. It does not place orders, does
 
 The Android project `pump-paper-bot-android` is a separate reference implementation. This repository contains only the new web project.
 
+The bundled 30-minute research history is refreshed from Binance market data during deployment. The public worker keeps the live PUMP/EUR snapshot warm through a separate current-market feed, so a visitor receives a prepared result even when an upstream API is temporarily unavailable.
+
 ## Local preview
 
-Serve the repository root with any static web server:
+Build and validate the hosting worker:
 
 ```bash
-python3 -m http.server 8080
+npm run build
+npm run validate
 ```
 
-Then open `http://localhost:8080`.
+To refresh the bundled six-month history before a deployment, run `npm run refresh-history`.
 
-The public contact endpoint is supplied by the production hosting worker and is not available in a plain static preview.
+The live market, backtest, private contact form and author inbox are supplied by the production worker and its database.
