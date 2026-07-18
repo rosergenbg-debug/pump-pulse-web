@@ -10,7 +10,7 @@ const source = await readFile(resolve(root, "dist/server/index.js"), "utf8");
 const moduleUrl = `data:text/javascript;base64,${Buffer.from(source).toString("base64")}`;
 const worker = await import(moduleUrl);
 assert.equal(typeof worker.default?.fetch, "function");
-for (const [path, type] of [["/", "text/html"], ["/de", "text/html"], ["/tr", "text/html"], ["/pulse-v9.css", "text/css"], ["/pulse-v15.js", "text/javascript"], ["/sitemap.xml", "application/xml"]]) {
+for (const [path, type] of [["/", "text/html"], ["/de", "text/html"], ["/tr", "text/html"], ["/pulse-v10.css", "text/css"], ["/pulse-v16.js", "text/javascript"], ["/sitemap.xml", "application/xml"]]) {
   const response = await worker.default.fetch(new Request(`https://example.test${path}`));
   assert.equal(response.status, 200);
   assert.match(response.headers.get("content-type"), new RegExp(type));
@@ -28,6 +28,12 @@ assert.equal(missing.status, 404);
 const inserted=[];
 const DB={prepare(sql){let values=[];return{bind(...args){values=args;return this},async run(){if(sql.startsWith("INSERT INTO pump_pulse_messages"))inserted.push(values);return{}},async first(){return null},async all(){return{results:[]}}}}};
 const env={DB,AUTHOR_ACCESS_TOKEN:"private-test-token"};
+const visitorRead=await worker.default.fetch(new Request("https://example.test/visit-counter"),env);
+assert.equal(visitorRead.status,200);
+assert.equal(visitorRead.headers.get("set-cookie"),null);
+const visitorConsent=await worker.default.fetch(new Request("https://example.test/visit-counter",{method:"POST"}),env);
+assert.equal(visitorConsent.status,200);
+assert.match(visitorConsent.headers.get("set-cookie"),/pump_pulse_visitor=/);
 const contact=await worker.default.fetch(new Request("https://example.test/contact-message",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({name:"44",email:"",message:"Hi",language:"en"})}),env);
 assert.equal(contact.status,201);
 assert.equal(inserted.length,1);
