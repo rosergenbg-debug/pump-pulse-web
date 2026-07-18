@@ -1,144 +1,59 @@
-const clamp = (n, a = 0, b = 100) => Math.max(a, Math.min(b, n));
+const clamp=(n,a=0,b=100)=>Math.max(a,Math.min(b,n));
 
-function ema(values, period) {
-  if (!values.length) return [];
-  const k = 2 / (period + 1), out = [];
-  let value = values[0];
-  values.forEach((next, index) => {
-    value = index ? next * k + value * (1 - k) : next;
-    out.push(value);
-  });
-  return out;
-}
+function ema(values,period){const out=Array(values.length).fill(null);if(values.length<period)return out;let value=values.slice(0,period).reduce((a,b)=>a+b,0)/period;out[period-1]=value;const k=2/(period+1);for(let i=period;i<values.length;i++){value=values[i]*k+value*(1-k);out[i]=value}return out}
+function rsi(values,period=14){const out=Array(values.length).fill(null);let gain=0,loss=0;for(let i=1;i<values.length;i++){const d=values[i]-values[i-1],g=Math.max(d,0),l=Math.max(-d,0);if(i<=period){gain+=g;loss+=l;if(i===period){gain/=period;loss/=period}}else{gain=(gain*(period-1)+g)/period;loss=(loss*(period-1)+l)/period}if(i>=period)out[i]=loss?100-100/(1+gain/loss):100}return out}
+function candleReturn(candles,i,bars){return i>=bars&&candles[i-bars].close>0?candles[i].close/candles[i-bars].close-1:0}
+function synthEur(pump,eur){const rates=new Map(eur.map(c=>[c.closeTime,c]));return pump.map(p=>{const e=rates.get(p.closeTime);return e?{...p,open:p.open/e.open,high:p.high/e.low,low:p.low/e.high,close:p.close/e.close}:null}).filter(Boolean)}
+function rollingFlow(candles,i){if(i<2)return null;const rows=candles.slice(i-2,i+1);if(rows.length!==3||rows.some(c=>!(c.volume>0)||c.taker<0))return null;return rows.reduce((a,c)=>a+2*c.taker/c.volume-1,0)/3}
 
-function rsi(values, period = 14) {
-  const out = Array(values.length).fill(null);
-  if (values.length <= period) return out;
-  let gain = 0, loss = 0;
-  for (let i = 1; i <= period; i++) {
-    const diff = values[i] - values[i - 1];
-    gain += Math.max(diff, 0); loss += Math.max(-diff, 0);
+function indicators(history){
+  const {pump,btc,eth=[],sol=[],futures=[],premium=[]}=history,closes=pump.map(c=>c.close),rs=rsi(closes),e20=ema(closes,20),e200=ema(closes,200),ret=pump.map((_,i)=>candleReturn(pump,i,1));
+  const volumeRatio=[],atr=[],drawdown=[],shockCount=[],breakout=[],spotFlow=[];
+  for(let i=0;i<pump.length;i++){
+    if(i<19)volumeRatio[i]=0;else{const w=pump.slice(i-19,i+1).map(c=>c.volume).sort((a,b)=>a-b),median=(w[9]+w[10])/2;volumeRatio[i]=median>0?pump[i].volume/median:0}
+    if(i>=13){let sum=0;for(let j=i-13;j<=i;j++){const prev=j?pump[j-1].close:pump[j].open;sum+=Math.max(pump[j].high-pump[j].low,Math.abs(pump[j].high-prev),Math.abs(pump[j].low-prev))}atr[i]=sum/14/pump[i].close}else atr[i]=null;
+    const high=Math.max(...pump.slice(Math.max(0,i-71),i+1).map(c=>c.high));drawdown[i]=high>0?pump[i].close/high-1:0;shockCount[i]=ret.slice(Math.max(0,i-35),i+1).filter(x=>x<=-.02).length;breakout[i]=i>=6&&pump[i].close>=Math.max(...pump.slice(i-6,i).map(c=>c.high));spotFlow[i]=rollingFlow(pump,i);
   }
-  gain /= period; loss /= period;
-  out[period] = loss ? 100 - 100 / (1 + gain / loss) : 100;
-  for (let i = period + 1; i < values.length; i++) {
-    const diff = values[i] - values[i - 1];
-    gain = (gain * (period - 1) + Math.max(diff, 0)) / period;
-    loss = (loss * (period - 1) + Math.max(-diff, 0)) / period;
-    out[i] = loss ? 100 - 100 / (1 + gain / loss) : 100;
-  }
-  return out;
+  const futuresFlow=new Map();futures.forEach((c,i)=>{const value=rollingFlow(futures,i);if(value!=null)futuresFlow.set(c.closeTime,value)});
+  const btcBy=new Map(btc.map((c,i)=>[c.closeTime,{...c,i}])),ethBy=new Map(eth.map(c=>[c.closeTime,c])),solBy=new Map(sol.map(c=>[c.closeTime,c])),premiumBy=new Map(premium.map(c=>[c.closeTime,c.close]));
+  const market=new Map();for(let i=6;i<pump.length;i++){const now=pump[i].closeTime,old=pump[i-6].closeTime,returns=[[btcBy.get(old),btcBy.get(now)],[ethBy.get(old),ethBy.get(now)],[solBy.get(old),solBy.get(now)]].map(([a,b])=>a&&b&&a.close>0?b.close/a.close-1:null);if(returns.every(x=>x!=null))market.set(now,returns.reduce((a,b)=>a+b,0)/3)}
+  const btcReturns=pump.map((c,i)=>{const now=btcBy.get(c.closeTime),prev=i?btcBy.get(pump[i-1].closeTime):null;return now&&prev&&prev.close>0?now.close/prev.close-1:NaN}),beta=Array(pump.length).fill(null),relative=Array(pump.length).fill(null),relativeSlope=Array(pump.length).fill(null);
+  for(let i=95;i<pump.length;i++){const xs=btcReturns.slice(i-95,i+1),ys=ret.slice(i-95,i+1);if(xs.some(x=>!Number.isFinite(x)))continue;const mx=xs.reduce((a,b)=>a+b,0)/xs.length,my=ys.reduce((a,b)=>a+b,0)/ys.length;let cov=0,v=0;for(let j=0;j<xs.length;j++){cov+=(xs[j]-mx)*(ys[j]-my);v+=(xs[j]-mx)**2}if(v>0)beta[i]=clamp(cov/v,-5,10)}
+  for(let i=6;i<pump.length;i++){const now=btcBy.get(pump[i].closeTime),old=btcBy.get(pump[i-6].closeTime),b=beta[i];if(now&&old&&old.close>0&&b!=null)relative[i]=candleReturn(pump,i,6)-b*(now.close/old.close-1)}
+  for(let i=11;i<pump.length;i++){const ys=relative.slice(i-5,i+1);if(ys.some(x=>x==null))continue;const mean=ys.reduce((a,b)=>a+b,0)/6;let n=0;for(let j=0;j<6;j++)n+=(j-2.5)*(ys[j]-mean);relativeSlope[i]=n/17.5}
+  const btcE50=ema(btc.map(c=>c.close),50),btcE200=ema(btc.map(c=>c.close),200);
+  return{rs,e20,e200,ret,volumeRatio,atr,drawdown,shockCount,breakout,spotFlow,futuresFlow,relativeSlope,market,premiumBy,btcBy,ethBy,solBy,
+    btcAbove(i){const b=btcBy.get(pump[i].closeTime);return !!b&&btcE200[b.i]!=null&&b.close>btcE200[b.i]},
+    btcSlope(i){const b=btcBy.get(pump[i].closeTime);return !!b&&b.i>=6&&btcE50[b.i]!=null&&btcE50[b.i-6]!=null&&btcE50[b.i]>btcE50[b.i-6]}}
 }
 
-function candleReturn(candles, index, bars) {
-  return index >= bars && candles[index - bars].close ? candles[index].close / candles[index - bars].close - 1 : 0;
+function lateRisk(pump,ind,i){if(i<6)return 0;const w=pump.slice(Math.max(0,i-47),i+1),lo=Math.min(...w.map(c=>c.low)),hi=Math.max(...w.map(c=>c.high)),location=hi>lo?clamp((pump[i].close-lo)/(hi-lo),0,1):.5,rr=ind.rs[i]??50,ema20=ind.e20[i];return Math.round(clamp(100*(.30*clamp((location-.5)/.5,0,1)+.20*clamp((rr-50)/18,0,1)+.20*clamp(candleReturn(pump,i,6)/.07,0,1)+.15*clamp(candleReturn(pump,i,2)/.04,0,1)+.15*(ema20?clamp((pump[i].close/ema20-1)/.035,0,1):0))))}
+function fundingAt(points,time){let lo=0,hi=points.length-1,answer=null;while(lo<=hi){const mid=(lo+hi)>>1;if(points[mid].time<=time){answer=points[mid];lo=mid+1}else hi=mid-1}return answer?.rate??Infinity}
+function baselineReadiness(active,armed,r,rp,extension,btcAbove,btcSlope,fundingReady,noChase){if(active)return 100;let raw=armed?20:0;raw+=r>=45&&r<=55&&rp<45?20:r>=42&&r<=45&&r>rp?16:r>=35&&r<=55?8:0;raw+=extension>=0&&extension<=.035?20:extension>=-.01&&extension<=.04?10:0;raw+=btcAbove?15:0;raw+=btcSlope?10:0;raw+=fundingReady?5:0;raw+=noChase?10:0;const preparing=armed&&r>=42&&r<=45&&r>rp&&extension>=-.01&&extension<=.035&&btcAbove&&btcSlope&&fundingReady&&noChase;return preparing?95+clamp(Math.round((r-42)/3*4),0,4):Math.min(raw,94)}
+function exhaustionReadiness(active,armed,confirm,r,flowReady,spot,futures,relative,riskReady,dd,limit){if(active)return 100;let raw=armed?30:0;raw+=confirm&&r>=43&&r<=58?25:r>=40&&r<=58?12:0;if(flowReady)raw+=20;else{if((spot??-1)>=0)raw+=6;if((futures??-1)>=.02)raw+=6;if((relative??-1)>=0)raw+=5}raw+=riskReady?15:0;raw+=dd<=limit?10:0;const near=armed&&r>=43&&r<=58&&riskReady&&dd<=limit;if(near){const futuresNear=futures!=null&&futures>=.02&&futures<.03;if(confirm&&(spot??-1)>=0&&futuresNear&&(relative??-1)>=0)return 99;if(!confirm&&flowReady)return 98;if(flowReady||confirm)return 96;return 95}return Math.min(raw,94)}
+function quantile(values,q){if(!values.length)return NaN;const s=values.slice().sort((a,b)=>a-b),p=(s.length-1)*q,l=Math.floor(p),u=Math.ceil(p);return l===u?s[l]:s[l]*(u-p)+s[u]*(p-l)}
+function marketGateAt(history,i){const {pump}=history,ind=history._ind;if(i<362)return false;const sampleAt=j=>{const p0=pump[j-2],p1=pump[j-1],p2=pump[j],b0=ind.btcBy.get(p0.closeTime),b1=ind.btcBy.get(p1.closeTime),b2=ind.btcBy.get(p2.closeTime),s0=ind.solBy.get(p0.closeTime),s1=ind.solBy.get(p1.closeTime),s2=ind.solBy.get(p2.closeTime);return b0&&b1&&b2&&s0&&s1&&s2?[p2.close/p0.close-1,b2.close/b0.close-1,s2.close/s0.close-1,p2.volume+p1.volume,b2.volume+b1.volume,s2.volume+s1.volume]:null},samples=[],start=Math.max(2,i-1440);for(let j=start;j<i;j++){const sample=sampleAt(j);if(sample)samples.push(sample)}const current=sampleAt(i);if(samples.length<360||!current)return false;return[0,1,2].every(k=>current[k]>0&&current[k]>=quantile(samples.map(x=>x[k]),.9)&&current[k+3]>=1.15*quantile(samples.map(x=>x[k+3]),.5))}
+
+function signalAt(history,ind,i,profile){
+  const {pump,funding=[]}=history;if(i<236||ind.e200[i]==null)return{mode:"NONE",readiness:0,stages:0,stagePass:[false,false,false,false],stageScores:[0,0,0,0],late:0,blocked:false,reason:"History"};
+  const c=pump[i],prev=pump[i-1],r=ind.rs[i]??0,rp=ind.rs[i-1]??0,extension=c.close/ind.e200[i]-1,recent6=candleReturn(pump,i,6),noChase=ind.ret[i]<.04&&recent6<.08&&extension<=.035,priceReady=extension>=0&&extension<=.035,btcAbove=ind.btcAbove(i),btcSlope=ind.btcSlope(i),rate=fundingAt(funding,c.closeTime);
+  let trendArmed=false;for(let j=Math.max(0,i-23);j<=i;j++)if((ind.rs[j]??100)<=40)trendArmed=true;const trend=trendArmed&&r>=45&&r<=55&&rp<45&&priceReady&&btcAbove&&btcSlope&&rate<=0&&noChase;
+  let shockArmed=false;for(let j=Math.max(1,i-35);j<=i;j++)if(ind.ret[j]<=-.03&&ind.volumeRatio[j]>=3&&(ind.rs[j]??100)<=40)shockArmed=true;const prevExtension=ind.e200[i-1]?prev.close/ind.e200[i-1]-1:Infinity,previousReady=rp>=45&&rp<=55&&prevExtension>=0&&prevExtension<=.035,shock=shockArmed&&r>=45&&r<=55&&priceReady&&!previousReady&&btcAbove&&noChase;
+  let exhaustionArmed=false;for(let j=Math.max(0,i-11);j<=i;j++)if(ind.drawdown[j]<=-.06&&ind.shockCount[j]>=3)exhaustionArmed=true;
+  const confirm=(ind.e20[i]!=null&&ind.e20[i-1]!=null&&c.close>=ind.e20[i]&&prev.close<ind.e20[i-1])||(ind.breakout[i]&&r>=55&&rp<55),spot=ind.spotFlow[i],futures=ind.futuresFlow.get(c.closeTime),relative=ind.relativeSlope[i],market=ind.market.get(c.closeTime),premium=ind.premiumBy.get(c.closeTime),atr=ind.atr[i],limit=profile==="active"?-.03:-.06,flowReady=spot!=null&&futures!=null&&relative!=null&&spot>=0&&futures>=.03&&relative>=0,riskReady=market!=null&&premium!=null&&atr!=null&&market>=-.02&&premium<=.0001&&atr>=.007&&atr<=.035&&extension<=.04,exhaustion=exhaustionArmed&&confirm&&r>=43&&r<=58&&flowReady&&riskReady&&ind.drawdown[i]<=limit;
+  let trendReady=baselineReadiness(trend,trendArmed,r,rp,extension,btcAbove,btcSlope,rate<=0,noChase),exhaustionReady=exhaustionReadiness(exhaustion,exhaustionArmed,confirm,r,flowReady,spot,futures,relative,riskReady,ind.drawdown[i],limit),shockReady=Math.max(shock?100:shockArmed&&r>=42&&r<=55&&btcAbove&&noChase?94:0,exhaustionReady),mode=exhaustion?"EXHAUSTION":shock?"SHOCK":trend?"TREND":"NONE",readiness=Math.max(trendReady,shockReady),late=lateRisk(pump,ind,i),blocked=late>=(profile==="active"?70:60)&&(mode!=="NONE"||readiness>=90);
+  if(blocked){mode="NONE";readiness=Math.min(readiness,70)}else if(mode!=="NONE"||readiness>=95){history._ind=ind;if(marketGateAt(history,i)){mode="NONE";readiness=Math.min(readiness,90);blocked=true}}
+  const stagePass=[exhaustionArmed&&ind.drawdown[i]<=limit,confirm&&r>=43&&r<=58,flowReady,riskReady],stageScores=[exhaustionArmed?(ind.drawdown[i]<=limit?100:70):Math.min(70,ind.shockCount[i]*18),confirm?100:r>=40&&r<=58?55:20,flowReady?100:Math.round(clamp(((spot??-.2)+.2)*90+((futures??-.03)+.03)*250)),riskReady?100:Math.round(clamp(45+(market??-.05)*500-(premium==null?25:0)))];
+  return{mode,readiness,stages:stagePass.filter(Boolean).length,stagePass,stageScores,late,blocked,threshold:limit*100,details:{shockCount:ind.shockCount[i],drawdown:ind.drawdown[i]*100,confirmation:confirm,rsi:r,spotFlow:(spot??0)*100,futuresFlow:(futures??0)*100,relative:(relative??0)*100,marketMove:(market??0)*100,atr:(atr??0)*100,premium:premium??null,funding:rate},reason:mode==="TREND"?"Android v2.5 trend recovery":mode==="SHOCK"?"Android v2.5 high-volume shock recovery":mode==="EXHAUSTION"?"Android v2.5 four-stage exhaustion reversal":blocked?"Android v2.5 late-entry or overheat protection":"Android v2.5 setup is incomplete"}
 }
 
-function synthEur(pump, eur) {
-  const rates = new Map(eur.map(c => [c.closeTime, c]));
-  return pump.map(p => {
-    const e = rates.get(p.closeTime);
-    return e ? {...p, open:p.open/e.open, high:p.high/e.low, low:p.low/e.high, close:p.close/e.close} : null;
-  }).filter(Boolean);
-}
+function percentile(value,values){return 100*values.filter(x=>x<=value).length/Math.max(1,values.length)}
+function liveSnapshot(history){const {pump}=history,ind=indicators(history),i=pump.length-1,variants={};for(const profile of["strict","active"])variants[profile]=signalAt(history,ind,i,profile);const hours=[];for(let j=Math.max(2,i-999);j<=i;j+=2)hours.push(Math.abs(candleReturn(pump,j,2)));const energy=Math.round(percentile(Math.abs(candleReturn(pump,i,2)),hours)),flow=Math.round(clamp(100*(.55*Math.tanh(candleReturn(pump,i,2)/.018)+.25*Math.tanh(candleReturn(pump,i,6)/.035)+.2*(ind.spotFlow[i]||0)),-100,100)),agreement=Math.round(clamp(45+Math.abs(flow)*.3+variants.strict.stages*6));let breathing="transition";if(variants.strict.late>=65&&flow>10)breathing="lateMove";else if(energy>=65&&flow>=18)breathing="upward";else if(energy>=65&&flow<=-18)breathing="downward";else if(energy<=35&&Math.abs(flow)<=20)breathing="calm";const start=Math.max(0,pump.length-1000),chart=[];for(let x=start;x<pump.length;x++)chart.push([pump[x].closeTime,pump[x].close,ind.e20[x]??pump[x].close]);return{updatedAt:Date.now(),candleTime:pump[i].closeTime,price:pump[i].close,change24:candleReturn(pump,i,48)*100,energy,flow,agreement,breathing,rsi:ind.rs[i]||0,drawdown:ind.drawdown[i]*100,variants,chart}}
 
-function indicators(pump, btc, sol) {
-  const closes = pump.map(x => x.close), e20 = ema(closes, 20), e200 = ema(closes, 200), rs = rsi(closes);
-  const btcE200 = ema(btc.map(x => x.close), 200), btcE50 = ema(btc.map(x => x.close), 50);
-  const btcBy = new Map(btc.map((x, i) => [x.closeTime, {...x, i}]));
-  const solBy = new Map(sol.map(x => [x.closeTime, x]));
-  const volumeRatio = [], drawdown = [], shockCount = [], breakout = [], spotFlow = [], atr = [];
-  for (let i = 0; i < pump.length; i++) {
-    const window = pump.slice(Math.max(0, i - 19), i + 1).map(x => x.volume).sort((a,b) => a-b);
-    const median = window.length >= 20 ? (window[9] + window[10]) / 2 : window.reduce((a,b) => a+b, 0) / Math.max(1, window.length);
-    volumeRatio[i] = median ? pump[i].volume / median : 0;
-    const high36h = Math.max(...pump.slice(Math.max(0, i - 71), i + 1).map(x => x.high));
-    drawdown[i] = pump[i].close / high36h - 1;
-    shockCount[i] = Array.from({length:Math.min(36, i + 1)}, (_,k) => candleReturn(pump, i-k, 1)).filter(x => x <= -.02).length;
-    breakout[i] = i >= 6 && pump[i].close >= Math.max(...pump.slice(i-6, i).map(x => x.high));
-    const flow = pump.slice(Math.max(0, i-2), i+1);
-    spotFlow[i] = flow.length === 3 ? flow.reduce((a,x) => a + (x.volume ? 2*x.taker/x.volume - 1 : 0), 0) / 3 : null;
-    const ranges = [];
-    for (let j=Math.max(1,i-13);j<=i;j++) ranges.push(Math.max(pump[j].high-pump[j].low,Math.abs(pump[j].high-pump[j-1].close),Math.abs(pump[j].low-pump[j-1].close)));
-    atr[i] = ranges.length === 14 ? ranges.reduce((a,b)=>a+b,0)/14/pump[i].close : null;
-  }
-  return {e20,e200,rs,volumeRatio,drawdown,shockCount,breakout,spotFlow,atr,btcBy,solBy,btcE200,btcE50,
-    btcAbove(i){const b=btcBy.get(pump[i].closeTime);return !!b&&b.close>btcE200[b.i]},
-    btcSlope(i){const b=btcBy.get(pump[i].closeTime);return !!b&&b.i>=6&&btcE50[b.i]>btcE50[b.i-6]},
-    market(i){if(i<6)return null;const b1=btcBy.get(pump[i].closeTime),b0=btcBy.get(pump[i-6].closeTime),s1=solBy.get(pump[i].closeTime),s0=solBy.get(pump[i-6].closeTime);return b1&&b0&&s1&&s0?((b1.close/b0.close-1)+(s1.close/s0.close-1))/2:null}
-  };
-}
-
-function lateRisk(pump, ind, i) {
-  if (i < 48) return 0;
-  const w=pump.slice(i-47,i+1),lo=Math.min(...w.map(x=>x.low)),hi=Math.max(...w.map(x=>x.high));
-  const location=(pump[i].close-lo)/Math.max(1e-12,hi-lo), rr=ind.rs[i]||50;
-  return Math.round(clamp(100*(.30*clamp((location-.5)/.5,0,1)+.20*clamp((rr-50)/18,0,1)+.20*clamp(candleReturn(pump,i,6)/.07,0,1)+.15*clamp(candleReturn(pump,i,2)/.04,0,1)+.15*clamp((pump[i].close/ind.e20[i]-1)/.035,0,1))));
-}
-
-function signalAt(pump, ind, i, profile) {
-  if (i < 236) return {mode:"NONE",readiness:0,stages:0,late:0,blocked:false,reason:"History"};
-  const c=pump[i],prev=pump[i-1],r=ind.rs[i]||0,rp=ind.rs[i-1]||0,extension=c.close/ind.e200[i]-1;
-  const noChase=candleReturn(pump,i,1)<.04&&candleReturn(pump,i,6)<.08&&extension<=.035, priceReady=extension>=0&&extension<=.035;
-  let trendArmed=false;for(let j=i-23;j<=i;j++)if((ind.rs[j]??100)<=40)trendArmed=true;
-  const trend=trendArmed&&r>=45&&r<=55&&rp<45&&priceReady&&ind.btcAbove(i)&&ind.btcSlope(i)&&noChase;
-  let shockArmed=false;for(let j=i-35;j<=i;j++)if(candleReturn(pump,j,1)<=-.03&&ind.volumeRatio[j]>=3&&(ind.rs[j]??100)<=40)shockArmed=true;
-  const prevExtension=prev.close/ind.e200[i-1]-1;
-  const shock=shockArmed&&r>=45&&r<=55&&priceReady&&!(rp>=45&&rp<=55&&prevExtension>=0&&prevExtension<=.035)&&ind.btcAbove(i)&&noChase;
-  let exhaustionArmed=false;for(let j=i-11;j<=i;j++)if(ind.drawdown[j]<=-.06&&ind.shockCount[j]>=3)exhaustionArmed=true;
-  const confirm=(c.close>=ind.e20[i]&&prev.close<ind.e20[i-1])||(ind.breakout[i]&&r>=55&&rp<55), flow=(ind.spotFlow[i]??-1)>=0;
-  const market=(ind.market(i)??-1)>=-.02&&(ind.atr[i]??0)>=.007&&(ind.atr[i]??1)<=.035, limit=profile==="active"?-.03:-.06;
-  const stagePass=[exhaustionArmed&&ind.drawdown[i]<=limit,confirm&&r>=43&&r<=58,flow,market];
-  const exhaustion=stagePass.every(Boolean);
-  const stageScores=[
-    clamp(55*Math.min(1,ind.shockCount[i]/3)+45*Math.min(1,Math.abs(ind.drawdown[i])/Math.abs(limit))),
-    confirm?100:clamp(35+Math.max(0,55-Math.abs(50-r)*5)),
-    clamp(50+100*(ind.spotFlow[i]??-.5)),
-    clamp(50+((ind.market(i)??-.05)+.02)*900)-((ind.atr[i]??0)<.007||(ind.atr[i]??1)>.035?35:0)
-  ];
-  const stages=stagePass.filter(Boolean).length,late=lateRisk(pump,ind,i);
-  const blocked=late>=(profile==="active"?70:60)&&(trend||shock||exhaustion), mode=blocked?"NONE":exhaustion?"EXHAUSTION":shock?"SHOCK":trend?"TREND":"NONE";
-  const readiness=mode!=="NONE"?100:blocked?70:Math.min(98,Math.round(stageScores.reduce((a,b)=>a+b,0)/4));
-  return {mode,readiness,stages,stagePass,stageScores:stageScores.map(Math.round),late,blocked,threshold:limit*100,details:{shockCount:ind.shockCount[i],drawdown:ind.drawdown[i]*100,confirmation:confirm,rsi:r,spotFlow:(ind.spotFlow[i]??0)*100,marketMove:(ind.market(i)??0)*100,atr:(ind.atr[i]??0)*100},reason:mode==="TREND"?"RSI recovery and trend confirmation":mode==="SHOCK"?"Recovery after a high-volume shock":mode==="EXHAUSTION"?"Exhaustion, reversal and buyer flow confirmed":blocked?"Late-entry protection":"Waiting for the next complete setup"};
-}
-
-function percentile(value, values) { return 100*values.filter(x=>x<=value).length/Math.max(1,values.length); }
-
-function liveSnapshot(history) {
-  const {pump,btc,sol}=history, ind=indicators(pump,btc,sol), i=pump.length-1, variants={};
-  for (const profile of ["strict","active"]) variants[profile]=signalAt(pump,ind,i,profile);
-  const hours=[];for(let j=Math.max(2,i-999);j<=i;j+=2)hours.push(Math.abs(candleReturn(pump,j,2)));
-  const energy=Math.round(percentile(Math.abs(candleReturn(pump,i,2)),hours));
-  const flow=Math.round(clamp(100*(.55*Math.tanh(candleReturn(pump,i,2)/.018)+.25*Math.tanh(candleReturn(pump,i,6)/.035)+.2*(ind.spotFlow[i]||0)),-100,100));
-  const agreement=Math.round(clamp(45+Math.abs(flow)*.3+variants.strict.stages*6));
-  let breathing="transition";if(variants.strict.late>=65&&flow>10)breathing="lateMove";else if(energy>=65&&flow>=18)breathing="upward";else if(energy>=65&&flow<=-18)breathing="downward";else if(energy<=35&&Math.abs(flow)<=20)breathing="calm";
-  const start=Math.max(0,pump.length-1000), chart=[];for(let x=start;x<pump.length;x++)chart.push([pump[x].closeTime,pump[x].close,ind.e20[x]]);
-  return {updatedAt:Date.now(),candleTime:pump[i].closeTime,price:pump[i].close,change24:candleReturn(pump,i,48)*100,energy,flow,agreement,breathing,rsi:ind.rs[i]||0,drawdown:ind.drawdown[i]*100,variants,chart};
-}
-
-function runStrategy(history, settings, profile) {
-  const {pump,btc,sol}=history,ind=indicators(pump,btc,sol),startTime=Number(settings.startTime)||pump[0].openTime,endTime=Number(settings.endTime)||pump.at(-1).closeTime;
-  const rangeStart=Math.max(236,pump.findIndex(c=>c.closeTime>=startTime)),foundEnd=pump.findLastIndex(c=>c.openTime<=endTime),rangeEnd=foundEnd<0?pump.length-1:foundEnd;
-  let cash=settings.capital,coins=0,totalFees=0,stops=0,wins=0,rounds=0,equity=[cash],events=[],connections=[],cool=-1;
-  for(let i=Math.max(236,rangeStart-1);i<Math.min(pump.length-2,rangeEnd);i++){
-    if(i<cool)continue;const sig=signalAt(pump,ind,i,profile),entryIndex=i+1;if(pump[entryIndex].openTime<startTime||pump[entryIndex].openTime>endTime||sig.mode==="NONE")continue;
-    const entry=pump[entryIndex],initial=cash,entryPrice=entry.open*(1+settings.slippage),buyFee=cash*settings.buyFee;totalFees+=buyFee;coins=(cash-buyFee)/entryPrice;cash=0;events.push({type:"BUY",time:entry.openTime,price:entryPrice});
-    const maxHold=sig.mode==="EXHAUSTION"?96:48,first=sig.mode==="EXHAUSTION"?.07:sig.mode==="SHOCK"?.06:.08,partial=sig.mode==="EXHAUSTION"?.4:sig.mode==="SHOCK"?.5:1;
-    let partialTaken=false,highest=entryPrice,partialText="",exitIndex=Math.min(entryIndex+maxHold+1,pump.length-1,rangeEnd),exitReason=sig.mode==="EXHAUSTION"?"48-hour limit":"24-hour limit";
-    for(let j=entryIndex;j<=Math.min(entryIndex+maxHold,pump.length-2,rangeEnd-1);j++){
-      const c=pump[j],exec=pump[j+1],stop=entryPrice*(1-.044);equity.push(cash+coins*c.low*(1-settings.slippage)*(1-settings.sellFee));
-      if(!partialTaken&&c.low<=stop){exitIndex=j+1;exitReason="Protective stop −4.4%";stops++;break}
-      if(!partialTaken&&c.high>=entryPrice*(1+first)){
-        const price=exec.open*(1-settings.slippage);if(partial>=.999){exitIndex=j+1;exitReason="Trend target +8%";break}
-        const sold=coins*partial,gross=sold*price,fee=gross*settings.sellFee;cash+=gross-fee;totalFees+=fee;coins-=sold;partialTaken=true;highest=Math.max(c.high,exec.open,entryPrice*(1+first));partialText=`${Math.round(partial*100)}% at +${Math.round(first*100)}%`;j++;continue;
-      }
-      if(partialTaken){const floor=sig.mode==="EXHAUSTION"?entryPrice*1.004:entryPrice,trail=Math.max(floor,highest*(1-.04));if(c.low<=trail){exitIndex=j+1;exitReason="Remainder trailing stop 4%";break}if(sig.mode==="EXHAUSTION"&&c.high>=entryPrice*1.14){exitIndex=j+1;exitReason="Remainder target +14%";break}highest=Math.max(highest,c.high)}
-    }
-    const exit=pump[exitIndex],exitPrice=exit.open*(1-settings.slippage),gross=coins*exitPrice,exitFee=gross*settings.sellFee;cash+=gross-exitFee;totalFees+=exitFee;coins=0;
-    const pnl=cash-initial,pct=pnl/initial*100;events.push({type:"SELL",time:exit.openTime,price:exitPrice});connections.push({entry:{time:entry.openTime,price:entryPrice,reason:sig.reason},exit:{time:exit.openTime,price:exitPrice,reason:exitReason},partial:partialText,pnl,pct,duration:exit.openTime-entry.openTime,mode:sig.mode});rounds++;if(pnl>=0)wins++;else if(sig.mode==="EXHAUSTION")cool=exitIndex+12;equity.push(cash);i=exitIndex;
-  }
-  let peak=equity[0],dd=0;for(const value of equity){peak=Math.max(peak,value);dd=Math.min(dd,value/peak-1)}
-  let curveBalance=settings.capital;const equityCurve=[[startTime,curveBalance]];for(const trade of connections){curveBalance+=trade.pnl;equityCurve.push([trade.exit.time,curveBalance])}if(equityCurve.at(-1)[0]!==endTime)equityCurve.push([endTime,cash]);
-  const selected=pump.slice(Math.max(0,rangeStart),rangeEnd+1),chart=[],step=Math.max(1,Math.ceil(selected.length/1100));for(let i=0;i<selected.length;i+=step){const sourceIndex=Math.max(0,rangeStart)+i;chart.push([pump[sourceIndex].closeTime,pump[sourceIndex].close,ind.e20[sourceIndex]])}if(chart.at(-1)?.[0]!==selected.at(-1)?.closeTime&&selected.length){const sourceIndex=rangeEnd;chart.push([pump[sourceIndex].closeTime,pump[sourceIndex].close,ind.e20[sourceIndex]])}
-  return {updatedAt:Date.now(),modelVersion:"Android-v2.5-web",from:startTime,to:endTime,availableFrom:pump[236]?.openTime||pump[0].openTime,availableTo:pump.at(-1).closeTime,settings,profile,equity:cash,profit:cash-settings.capital,profitPct:(cash/settings.capital-1)*100,rounds,wins,winRate:rounds?wins/rounds*100:0,maxDd:dd*100,totalFees,totalFeePct:totalFees/settings.capital*100,stops,events,connections,equityCurve,chart};
+function runStrategy(history,settings,profile){
+  const {pump}=history,ind=indicators(history),startTime=Number(settings.startTime)||pump[236].openTime,endTime=Number(settings.endTime)||pump.at(-1).closeTime,rangeStart=Math.max(236,pump.findIndex(c=>c.closeTime>=startTime)),foundEnd=pump.findLastIndex(c=>c.openTime<=endTime),rangeEnd=foundEnd<0?pump.length-1:foundEnd;let cash=settings.capital,coins=0,totalFees=0,stops=0,wins=0,rounds=0,equity=[cash],events=[],connections=[],cool=-1;
+  for(let i=Math.max(236,rangeStart-1);i<Math.min(pump.length-1,rangeEnd);){if(i<cool){i++;continue}const sig=signalAt(history,ind,i,profile),entryIndex=i+1;if(entryIndex>=rangeEnd||pump[entryIndex].openTime<startTime||pump[entryIndex].openTime>endTime||sig.mode==="NONE"){i++;continue}const entry=pump[entryIndex],initial=cash,entryPrice=entry.open*(1+settings.slippage),buyFee=cash*settings.buyFee;totalFees+=buyFee;coins=(cash-buyFee)/entryPrice;cash=0;events.push({type:"BUY",time:entry.openTime,price:entryPrice});const maxHold=sig.mode==="EXHAUSTION"?96:48,first=sig.mode==="EXHAUSTION"?.07:sig.mode==="SHOCK"?.06:.08,partial=sig.mode==="EXHAUSTION"?.4:sig.mode==="SHOCK"?.5:1,lastSignal=Math.min(entryIndex+maxHold-1,rangeEnd-1,pump.length-2);let partialTaken=false,highest=entryPrice,partialText="",exitIndex=Math.min(lastSignal+1,rangeEnd),exitReason=sig.mode==="EXHAUSTION"?"48-hour limit":"24-hour limit",j=entryIndex;
+    while(j<=lastSignal){const c=pump[j],exec=pump[j+1],stop=entryPrice*(1-.044);equity.push(cash+coins*c.low*(1-settings.slippage)*(1-settings.sellFee));if(!partialTaken&&c.low<=stop){exitIndex=j+1;exitReason="Protective stop −4.4%";stops++;break}if(!partialTaken&&c.high>=entryPrice*(1+first)){const fill=exec.open*(1-settings.slippage);if(partial>=.999){exitIndex=j+1;exitReason="Trend target +8%";break}const sold=coins*partial,gross=sold*fill,fee=gross*settings.sellFee;cash+=gross-fee;totalFees+=fee;coins-=sold;partialTaken=true;highest=Math.max(c.high,exec.open,entryPrice*(1+first));partialText=`${Math.round(partial*100)}% at +${Math.round(first*100)}%`;events.push({type:"SELL_HALF",time:exec.openTime,price:fill});j=j+1;continue}if(partialTaken){const floor=sig.mode==="EXHAUSTION"?entryPrice*1.004:entryPrice,trail=Math.max(floor,highest*(1-.04));if(c.low<=trail){exitIndex=j+1;exitReason="Remainder trailing stop 4%";break}if(sig.mode==="EXHAUSTION"&&c.high>=entryPrice*1.14){exitIndex=j+1;exitReason="Remainder target +14%";break}highest=Math.max(highest,c.high)}j++}
+    const exit=pump[exitIndex],exitPrice=exit.open*(1-settings.slippage),gross=coins*exitPrice,exitFee=gross*settings.sellFee;cash+=gross-exitFee;totalFees+=exitFee;coins=0;const pnl=cash-initial,pct=pnl/initial*100;events.push({type:"SELL",time:exit.openTime,price:exitPrice});connections.push({entry:{time:entry.openTime,price:entryPrice,reason:sig.reason},exit:{time:exit.openTime,price:exitPrice,reason:exitReason},partial:partialText,pnl,pct,duration:exit.openTime-entry.openTime,mode:sig.mode});rounds++;if(pnl>0)wins++;else if(sig.mode==="EXHAUSTION")cool=exitIndex+12;equity.push(cash);i=exitIndex}
+  let peak=equity[0],dd=0;for(const value of equity){peak=Math.max(peak,value);dd=Math.min(dd,value/peak-1)}const selected=pump.slice(rangeStart,rangeEnd+1),chart=[],step=Math.max(1,Math.ceil(selected.length/1800));for(let i=0;i<selected.length;i+=step){const k=rangeStart+i;chart.push([pump[k].closeTime,pump[k].close,ind.e20[k]??pump[k].close])}if(selected.length&&chart.at(-1)?.[0]!==selected.at(-1).closeTime)chart.push([selected.at(-1).closeTime,selected.at(-1).close,ind.e20[rangeEnd]??selected.at(-1).close]);return{updatedAt:Date.now(),modelVersion:"Android-v2.5-full",from:startTime,to:endTime,availableFrom:pump[236]?.openTime||pump[0].openTime,availableTo:pump.at(-1).closeTime,settings,profile,equity:cash,profit:cash-settings.capital,profitPct:(cash/settings.capital-1)*100,rounds,wins,winRate:rounds?wins/rounds*100:0,maxDd:dd*100,totalFees,totalFeePct:totalFees/settings.capital*100,stops,events,connections,chart}
 }
