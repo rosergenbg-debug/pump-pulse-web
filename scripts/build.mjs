@@ -20,7 +20,7 @@ const assets="const assets=new Map("+JSON.stringify([
   ["/tr",{body:html,type:"text/html; charset=utf-8"}],
   ["/tr/",{body:html,type:"text/html; charset=utf-8"}],
   ["/pulse-v10.css",{body:css,type:"text/css; charset=utf-8"}],
-  ["/pulse-v17.js",{body:js,type:"text/javascript; charset=utf-8"}],
+  ["/pulse-v18.js",{body:js,type:"text/javascript; charset=utf-8"}],
   ["/robots.txt",{body:robots,type:"text/plain; charset=utf-8"}],
   ["/sitemap.xml",{body:sitemap,type:"application/xml; charset=utf-8"}]
 ])+");\n";
