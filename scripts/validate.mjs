@@ -10,12 +10,19 @@ const source = await readFile(resolve(root, "dist/server/index.js"), "utf8");
 const moduleUrl = `data:text/javascript;base64,${Buffer.from(source).toString("base64")}`;
 const worker = await import(moduleUrl);
 assert.equal(typeof worker.default?.fetch, "function");
-for (const [path, type] of [["/", "text/html"], ["/pulse-v8.css", "text/css"], ["/pulse-v14.js", "text/javascript"]]) {
+for (const [path, type] of [["/", "text/html"], ["/de", "text/html"], ["/tr", "text/html"], ["/pulse-v9.css", "text/css"], ["/pulse-v15.js", "text/javascript"], ["/sitemap.xml", "application/xml"]]) {
   const response = await worker.default.fetch(new Request(`https://example.test${path}`));
   assert.equal(response.status, 200);
   assert.match(response.headers.get("content-type"), new RegExp(type));
   assert.ok((await response.text()).length > 100);
 }
+const germanHtml=await (await worker.default.fetch(new Request("https://example.test/de"))).text();
+assert.match(germanHtml,/<html lang="de"/);
+assert.match(germanHtml,/<link rel="canonical" href="https:\/\/pump-pulse-market\.serano\.chatgpt\.site\/de">/);
+assert.match(germanHtml,/PUMP Coin Einstiegs-/);
+const turkishHtml=await (await worker.default.fetch(new Request("https://example.test/tr"))).text();
+assert.match(turkishHtml,/<html lang="tr"/);
+assert.match(turkishHtml,/PUMP Coin Alım Satım Sinyalleri/);
 const missing = await worker.default.fetch(new Request("https://example.test/missing"));
 assert.equal(missing.status, 404);
 const inserted=[];
