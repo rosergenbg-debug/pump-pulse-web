@@ -12,7 +12,7 @@
   <meta property="og:title" content="PUMP Pulse — Mathematical PUMP Model">
   <meta property="og:description" content="Live PUMP pulse and a personalized six-month strategy test.">
   <title>PUMP Pulse — Mathematical PUMP Model</title>
-  <link rel="stylesheet" href="/pulse-v4.css">
+  <link rel="stylesheet" href="/pulse-v5.css">
 </head>
 <body>
   <div class="ambient a"></div><div class="ambient b"></div>
@@ -34,27 +34,46 @@
     </aside>
 
     <section class="view active" data-view="pulse">
+      <article class="purpose-card">
+        <span data-i18n="whatIsThis">WHAT THIS PAGE SHOWS</span>
+        <h1 data-i18n="purposeTitle">When the PUMP model says wait, enter or exit</h1>
+        <p data-i18n="purposeText">A mathematical research assistant for PUMP/EUR. It evaluates only completed 30-minute candles and turns the four-stage strategy into a clear action scale.</p>
+      </article>
       <div class="market-head">
         <div><p class="kicker"><i></i><span data-i18n="closed">CLOSED 30-MIN CANDLES</span></p><h1>PUMP<em>/EUR</em></h1></div>
         <div class="price"><strong id="pumpPrice">—</strong><span id="pumpChange">—</span><small id="updatedAt">—</small></div>
       </div>
 
-      <article class="signal-card">
-        <div class="orb">
-          <svg viewBox="0 0 160 160" aria-label="Signal readiness"><circle class="track" cx="80" cy="80" r="64"></circle><circle id="orbProgress" class="progress" cx="80" cy="80" r="64"></circle></svg>
-          <div><span data-i18n="readiness">READINESS</span><strong id="readinessValue">—</strong><small>/100</small></div>
+      <article id="signalCard" class="signal-card">
+        <header class="command-head">
+          <div><span data-i18n="modelDecision">MODEL DECISION</span><strong id="actionTag" class="command wait" data-i18n="wait">WAIT</strong></div>
+          <div class="score"><strong id="readinessValue">—</strong><small>/100</small></div>
+        </header>
+        <h2 id="breathingState">PUMP Pulse</h2>
+        <p id="signalReason" data-i18n="prepared">The latest complete market calculation is prepared.</p>
+        <div class="action-scale entry-scale" aria-label="Entry readiness scale">
+          <i id="entryNeedle"></i><b id="entryFill"></b>
+          <div><span data-i18n="wait">WAIT</span><span data-i18n="prepare">PREPARE</span><span data-i18n="enter">ENTER</span></div>
         </div>
-        <div class="signal-copy"><span id="actionTag" class="action wait" data-i18n="wait">WAIT</span><h2 id="breathingState">PUMP Pulse</h2><p id="signalReason" data-i18n="prepared">The latest complete market calculation is prepared.</p></div>
+        <div class="stage-line"><span data-i18n="fourSteps">4-STAGE ENTRY</span><div id="stageDots"><i></i><i></i><i></i><i></i></div><b id="stageCount">0/4</b></div>
       </article>
 
       <div class="profile-row"><span data-i18n="profile">Profile</span><div id="profileSwitch" class="switch"><button class="active" type="button" data-value="strict" data-i18n="strict">Strict</button><button type="button" data-value="active" data-i18n="active">Active</button></div></div>
 
-      <div class="metrics">
+      <div class="metrics compact">
         <article><span data-i18n="activity">Activity</span><strong id="energyValue">—</strong><div class="bar amber"><i id="energyBar"></i></div></article>
         <article><span data-i18n="flow">Buyer flow</span><strong id="flowValue">—</strong><div class="bar cyan"><i id="flowBar"></i></div></article>
         <article><span data-i18n="agreement">Agreement</span><strong id="confidenceValue">—</strong><div class="bar violet"><i id="confidenceBar"></i></div></article>
         <article><span data-i18n="late">Late risk</span><strong id="lateValue">—</strong><div class="bar rose"><i id="lateBar"></i></div></article>
       </div>
+
+      <article class="exit-card">
+        <header><div><span data-i18n="exitControl">EXIT CONTROL</span><strong id="exitAction" data-i18n="noPosition">NO POSITION</strong></div><b id="positionPnl">—</b></header>
+        <p data-i18n="exitHelp">Enter your real purchase price to see the stop, partial profit and exit zones.</p>
+        <div class="position-row"><label><span data-i18n="purchasePrice">Purchase price</span><div><input id="positionEntry" type="number" inputmode="decimal" min="0" step="0.00000001" placeholder="0.00000000"><b>EUR</b></div></label><button id="trackPosition" type="button" data-i18n="track">TRACK</button></div>
+        <div class="exit-scale"><i id="exitNeedle"></i><div><span>−4.4%</span><span data-i18n="hold">HOLD</span><span>+7%</span><span>+14%</span></div></div>
+        <small id="exitReason" data-i18n="noPositionHint">No position is being tracked on this device.</small>
+      </article>
 
       <article class="chart-card">
         <header><div><strong data-i18n="movement">PUMP MOVEMENT</strong><span data-i18n="recent">recent closed candles</span></div><small id="chartTime">—</small></header>
@@ -62,7 +81,6 @@
         <footer><span><i class="cyan-dot"></i>PUMP</span><span><i class="purple-dot"></i>EMA20</span></footer>
       </article>
 
-      <div class="decision"><article><span data-i18n="buy">BUY</span><strong id="buyStatus" data-i18n="notReady">NOT READY</strong></article><article><span data-i18n="sell">SELL</span><strong data-i18n="noPosition">NO POSITION</strong></article></div>
     </section>
 
     <section class="view" data-view="test">
@@ -82,9 +100,10 @@
 
       <div id="testLoading" class="loading hidden"><i></i><strong data-i18n="calculating">Server is calculating…</strong></div>
       <section id="testResults" class="results hidden">
+        <article class="reference-card"><span data-i18n="androidControl">VERIFIED ANDROID v2.5 CONTROL · 0.15% + 0.15%</span><div><b data-i18n="strict">Strict</b><strong>7 · +35.64% · DD −5.61%</strong></div><div><b data-i18n="active">Active</b><strong>9 · +39.13% · DD −6.60%</strong></div><small data-i18n="personalizedBelow">Your current web result below uses the selected fees and the latest rolling six-month window.</small></article>
         <article class="result-main"><span id="resultProfile">PUMP/EUR</span><strong id="resultPercent">—</strong><b id="resultMoney">—</b><small id="balancePath">—</small></article>
         <div class="result-grid"><article><strong id="tradeCount">—</strong><span data-i18n="trades">TRADES</span></article><article><strong id="winRate">—</strong><span data-i18n="profitable">PROFITABLE</span></article><article><strong id="drawdown">—</strong><span data-i18n="drawdown">MAX. DRAWDOWN</span></article><article><strong id="feeTotal">—</strong><span data-i18n="fees">FEES</span></article></div>
-        <article class="chart-card"><header><div><strong data-i18n="tradeChart">TRADE CHART</strong><span id="testPeriod">—</span></div></header><canvas id="testCanvas" width="900" height="390"></canvas><footer><span><i class="green-dot"></i><span data-i18n="entries">entries</span></span><span><i class="red-dot"></i><span data-i18n="exits">exits</span></span></footer></article>
+        <article class="chart-card equity-card"><header><div><strong data-i18n="capitalCurve">CAPITAL CURVE</strong><span id="testPeriod">—</span></div><b id="chartRange">—</b></header><canvas id="testCanvas" width="900" height="390"></canvas><footer><span><i class="green-dot"></i><span data-i18n="afterTrades">balance after each completed trade</span></span></footer></article>
         <div class="trade-title"><h2 data-i18n="completed">Completed trades</h2><span id="tradeSummary">—</span></div><div id="tradeList" class="trade-list"></div>
       </section>
     </section>
@@ -94,7 +113,7 @@
       <form id="contactForm" class="contact" novalidate>
         <div class="contact-pair"><label><span data-i18n="nameOptional">Name (optional)</span><input name="name" autocomplete="name" maxlength="80"></label><label><span data-i18n="emailOptional">Email (optional)</span><input name="email" type="email" autocomplete="email" maxlength="160"></label></div>
         <p data-i18n="oneRequired">Please provide at least a name or an email.</p>
-        <label><span data-i18n="message">Message</span><textarea name="message" rows="6" minlength="10" maxlength="3000" required></textarea></label>
+        <label><span data-i18n="message">Message</span><textarea name="message" rows="6" minlength="1" maxlength="3000" required></textarea></label>
         <label class="consent"><input type="checkbox" required><span data-i18n="consent">I agree that my details are stored to answer this message.</span></label>
         <div class="trap" aria-hidden="true"><input name="website" tabindex="-1" autocomplete="off"></div>
         <button class="cta" type="submit"><span data-i18n="send">SEND PRIVATELY</span><i>→</i></button><p id="contactStatus" class="form-status" aria-live="polite"></p>
@@ -108,6 +127,6 @@
     <button type="button" data-tab="test"><svg viewBox="0 0 24 24"><path d="M4 19V9m5 10V5m5 14v-7m5 7V3"/></svg><span data-i18n="navTest">6M test</span></button>
     <button type="button" data-tab="contact"><svg viewBox="0 0 24 24"><path d="M4 5h16v12H8l-4 4V5Zm4 4h8m-8 4h5"/></svg><span data-i18n="navContact">Contact</span></button>
   </nav>
-  <script src="/pulse-v10.js" defer></script>
+  <script src="/pulse-v11.js" defer></script>
 </body>
 </html>
