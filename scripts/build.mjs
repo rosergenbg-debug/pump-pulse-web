@@ -5,11 +5,13 @@ import { fileURLToPath } from "node:url";
 const root=resolve(dirname(fileURLToPath(import.meta.url)),"..");
 const dist=resolve(root,"dist");
 const readSite=name=>readFile(resolve(root,"site",name),"utf8");
-const [html,css,js,robots,engine,runtime,hosting,historySeed]=await Promise.all([
+const [html,css,js,robots,engine,runtime,hosting,historyMeta,pumpA,pumpB,eurA,eurB,btcSeed,ethSeed,solSeed,futuresSeed,premiumSeed,fundingSeed]=await Promise.all([
   readSite("index.html"),readSite("styles.css"),readSite("app.js"),readSite("robots.txt"),
-  readFile(resolve(root,"server/engine.js"),"utf8"),readFile(resolve(root,"server/worker.js"),"utf8"),readFile(resolve(root,".openai/hosting.json"),"utf8"),readFile(resolve(root,"data/history-seed.json"),"utf8")
+  readFile(resolve(root,"server/engine.js"),"utf8"),readFile(resolve(root,"server/worker.js"),"utf8"),readFile(resolve(root,".openai/hosting.json"),"utf8"),
+  ...["history-meta","pump-a","pump-b","eur-a","eur-b","btc"].map(name=>readFile(resolve(root,`data/${name}.json`),"utf8")),
+  ...["eth","sol","futures","premium","funding"].map(name=>readFile(resolve(root,`data/context-${name}.json`),"utf8"))
 ]);
-const seed="const HISTORY_SEED="+historySeed+";\n";
+const seed="const HISTORY_SEED=Object.assign("+[historyMeta,btcSeed,ethSeed,solSeed,futuresSeed,premiumSeed,fundingSeed].join(",")+");HISTORY_SEED.pump="+pumpA+".concat("+pumpB+");HISTORY_SEED.eur="+eurA+".concat("+eurB+");\n";
 const assets="const assets=new Map("+JSON.stringify([
   ["/",{body:html,type:"text/html; charset=utf-8"}],
   ["/index.html",{body:html,type:"text/html; charset=utf-8"}],
