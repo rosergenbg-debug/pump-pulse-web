@@ -28,10 +28,11 @@ The bundled 30-minute research history is refreshed from Binance market data dur
 Build and validate the hosting worker:
 
 ```bash
+npm run refresh-history
 npm run build
 npm run validate
 ```
 
-To refresh the bundled six-month history before a deployment, run `npm run refresh-history`.
+`refresh-history` creates the bundled six-month dataset required by the server build. Run it again before each production deployment.
 
 The live market, backtest, private contact form and author inbox are supplied by the production worker and its database.
