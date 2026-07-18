@@ -1,2 +1,4 @@
 User-agent: *
 Allow: /
+
+Sitemap: https://pump-pulse-market.serano.chatgpt.site/sitemap.xml
