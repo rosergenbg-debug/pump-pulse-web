@@ -15,8 +15,8 @@ const seed="const HISTORY_SEED=Object.assign("+[historyMeta,btcSeed,ethSeed,solS
 const assets="const assets=new Map("+JSON.stringify([
   ["/",{body:html,type:"text/html; charset=utf-8"}],
   ["/index.html",{body:html,type:"text/html; charset=utf-8"}],
-  ["/pulse-v7.css",{body:css,type:"text/css; charset=utf-8"}],
-  ["/pulse-v13.js",{body:js,type:"text/javascript; charset=utf-8"}],
+  ["/pulse-v8.css",{body:css,type:"text/css; charset=utf-8"}],
+  ["/pulse-v14.js",{body:js,type:"text/javascript; charset=utf-8"}],
   ["/robots.txt",{body:robots,type:"text/plain; charset=utf-8"}]
 ])+");\n";
 await rm(dist,{recursive:true,force:true});
