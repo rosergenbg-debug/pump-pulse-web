@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-const fs=require('fs');
+import fs from 'node:fs';
 const API='https://data-api.binance.vision/api/v3/klines';
 const TEST_START=Date.parse('2026-02-01T00:00:00Z');
 const TEST_END=Date.parse('2026-03-01T00:00:00Z');
