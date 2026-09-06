@@ -4,6 +4,7 @@ on:
     branches: ["research/v14-sol-oos-2026-02"]
     paths:
       - "tools/v14_sol_oos.js"
+      - "tools/v14_sol_6m_wrapper.mjs"
       - ".github/workflows/v14-sol-oos.yml"
   workflow_dispatch:
 permissions:
@@ -14,11 +15,15 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
-      - name: Run replay
+      - name: Run one-month replay
         run: node tools/v14_sol_oos.js | tee v14_sol_oos_summary.txt
+      - name: Run six-month replay
+        run: node tools/v14_sol_6m_wrapper.mjs | tee v14_sol_6m_summary.txt
       - uses: actions/upload-artifact@v4
         with:
-          name: v14-sol-oos-2026-02
+          name: v14-sol-oos-replays
           path: |
             v14_sol_oos_summary.txt
             v14_sol_oos_result.json
+            v14_sol_6m_summary.txt
+            v14_sol_6m_result.json
