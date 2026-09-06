@@ -1,0 +1,24 @@
+name: V14 SOL OOS
+on:
+  push:
+    branches: ["research/v14-sol-oos-2026-02"]
+    paths:
+      - "tools/v14_sol_oos.js"
+      - ".github/workflows/v14-sol-oos.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  replay:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run replay
+        run: node tools/v14_sol_oos.js | tee v14_sol_oos_summary.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: v14-sol-oos-2026-02
+          path: |
+            v14_sol_oos_summary.txt
+            v14_sol_oos_result.json
