@@ -1,0 +1,29 @@
+name: V13 V7 exact replay
+on:
+  push:
+    branches: ["research/v13-v7-exact-replay"]
+    paths:
+      - "tools/v13_v7_exact_replay.mjs"
+      - "research/PUMP_BEST_DIP_EXACT.json"
+      - ".github/workflows/v13-v7-exact-replay.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  replay:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Replay PUMP 2025 with Android V7 semantics
+        run: node tools/v13_v7_exact_replay.mjs 2025-08-01T00:00:00Z 2026-01-01T00:00:00Z v13_v7_pump_2025.json | tee v13_v7_pump_2025_summary.txt
+      - name: Replay PUMP Feb-Aug 2026 with Android V7 semantics
+        run: node tools/v13_v7_exact_replay.mjs 2026-02-01T00:00:00Z 2026-08-01T00:00:00Z v13_v7_pump_2026_feb_aug.json | tee v13_v7_pump_2026_feb_aug_summary.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: v13-v7-exact-replays
+          path: |
+            v13_v7_pump_2025.json
+            v13_v7_pump_2025_summary.txt
+            v13_v7_pump_2026_feb_aug.json
+            v13_v7_pump_2026_feb_aug_summary.txt
