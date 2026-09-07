@@ -1,0 +1,71 @@
+name: V13 90b41 PUMP OOS 2025
+on:
+  push:
+    branches: ["research/v13-90b41-pump-oos-2025"]
+    paths:
+      - ".github/workflows/v13-pump-oos-2025.yml"
+      - "research/PUMP_BEST_DIP_EXACT.json"
+      - "tools/v13_exact_config_crossmarket.mjs"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  replay:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build frozen 2025 OOS runner
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('tools/v13_exact_config_crossmarket.mjs').read_text()
+          p=p.replace("2026-02-01T00:00:00Z", "2025-08-01T00:00:00Z")
+          p=p.replace("2026-08-01T00:00:00Z", "2026-01-01T00:00:00Z")
+          p=p.replace("const SYMBOLS=['PUMPUSDT','WIFUSDT','BONKUSDT','SOLUSDT'];", "const SYMBOLS=['PUMPUSDT'];")
+          p=p.replace("if(x.t<START||x.t>=END)continue;const hour=", "if(x.t<START||x.t>=END)continue;if(Math.floor(x.t/60000)%15!==0)continue;const hour=")
+          p=p.replace("v13_exact_90b41_crossmarket_result.json", "v13_90b41_pump_oos_2025_result.json")
+          p=p.replace("resolution:'1m'", "resolution:'1m features / 15m decision cadence'")
+          Path('/tmp/v13_oos_2025.mjs').write_text(p)
+          PY
+      - name: Run frozen PUMP OOS 2025
+        run: node /tmp/v13_oos_2025.mjs | tee v13_90b41_pump_oos_2025_summary.txt
+      - name: Build monthly breakdown
+        run: |
+          python - <<'PY'
+          import json, math
+          from datetime import datetime, timezone
+          p='v13_90b41_pump_oos_2025_result.json'
+          data=json.load(open(p))
+          r=data['results']['PUMPUSDT']
+          months={}
+          for t in r['trades']:
+              m=datetime.fromtimestamp(t['entryTime']/1000, tz=timezone.utc).strftime('%Y-%m')
+              months.setdefault(m,[]).append(t)
+          out=[]
+          for m in sorted(months):
+              ts=months[m]
+              cap=1.0
+              for t in ts: cap*=1+t['netPct']/100
+              wins=sum(t['netPct']>0 for t in ts)
+              gains=sum(max(t['netPct'],0) for t in ts)
+              losses=-sum(min(t['netPct'],0) for t in ts)
+              out.append({
+                  'month':m,'trades':len(ts),'wins':wins,
+                  'winRate':wins/len(ts)*100 if ts else 0,
+                  'compoundPct':(cap-1)*100,
+                  'avgNetPct':sum(t['netPct'] for t in ts)/len(ts) if ts else 0,
+                  'profitFactor':gains/losses if losses else None,
+                  'exits':{k:sum(t['reason']==k for t in ts) for k in ['TP','STOP_MARKET','TRAIL','BTC_SHOCK','TIME']}
+              })
+          json.dump({'overall':r,'byEntryMonth':out},open('v13_90b41_pump_oos_2025_monthly.json','w'),indent=2)
+          print('MONTHLY_BREAKDOWN')
+          for x in out: print(json.dumps(x))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: v13-90b41-pump-oos-2025
+          path: |
+            v13_90b41_pump_oos_2025_summary.txt
+            v13_90b41_pump_oos_2025_result.json
+            v13_90b41_pump_oos_2025_monthly.json
