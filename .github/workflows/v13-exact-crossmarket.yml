@@ -15,11 +15,24 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
-      - name: Run exact config replay
+      - name: Run literal every-minute config replay
         run: node tools/v13_exact_config_crossmarket.mjs | tee v13_exact_90b41_crossmarket_summary.txt
+      - name: Run 15-minute decision-cadence replay
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('tools/v13_exact_config_crossmarket.mjs').read_text()
+          p=p.replace("if(x.t<START||x.t>=END)continue;const hour=", "if(x.t<START||x.t>=END)continue;if(Math.floor(x.t/60000)%15!==0)continue;const hour=")
+          p=p.replace("v13_exact_90b41_crossmarket_result.json", "v13_exact_90b41_crossmarket_15m_result.json")
+          p=p.replace("resolution:'1m'", "resolution:'1m features / 15m decision cadence'")
+          Path('/tmp/v13_exact_15m.mjs').write_text(p)
+          PY
+          node /tmp/v13_exact_15m.mjs | tee v13_exact_90b41_crossmarket_15m_summary.txt
       - uses: actions/upload-artifact@v4
         with:
           name: v13-exact-90b41-crossmarket
           path: |
             v13_exact_90b41_crossmarket_summary.txt
             v13_exact_90b41_crossmarket_result.json
+            v13_exact_90b41_crossmarket_15m_summary.txt
+            v13_exact_90b41_crossmarket_15m_result.json
