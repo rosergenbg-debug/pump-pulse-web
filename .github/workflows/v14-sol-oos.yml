@@ -13,7 +13,7 @@ permissions:
 jobs:
   replay:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - name: Run one-month replay
@@ -22,6 +22,16 @@ jobs:
         run: node tools/v14_sol_6m_wrapper.mjs | tee v14_sol_6m_summary.txt
       - name: Match volatility and replay closest market
         run: node tools/compare_volatility_and_replay.mjs | tee volatility_v14_crossmarket_summary.txt
+      - name: Replay same frozen V14 on PUMP
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('tools/compare_volatility_and_replay.mjs').read_text()
+          p=p.replace("const chosen=ranked[0]?.[0];", "const chosen='PUMPUSDT';")
+          p=p.replace("volatility_v14_crossmarket_result.json", "v14_pump_same_span_result.json")
+          Path('/tmp/v14_pump_same_span.mjs').write_text(p)
+          PY
+          node /tmp/v14_pump_same_span.mjs | tee v14_pump_same_span_summary.txt
       - uses: actions/upload-artifact@v4
         with:
           name: v14-crossmarket-research
@@ -32,3 +42,5 @@ jobs:
             v14_sol_6m_result.json
             volatility_v14_crossmarket_summary.txt
             volatility_v14_crossmarket_result.json
+            v14_pump_same_span_summary.txt
+            v14_pump_same_span_result.json
