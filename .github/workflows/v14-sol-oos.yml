@@ -5,6 +5,7 @@ on:
     paths:
       - "tools/v14_sol_oos.js"
       - "tools/v14_sol_6m_wrapper.mjs"
+      - "tools/compare_volatility_and_replay.mjs"
       - ".github/workflows/v14-sol-oos.yml"
   workflow_dispatch:
 permissions:
@@ -12,18 +13,22 @@ permissions:
 jobs:
   replay:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - name: Run one-month replay
         run: node tools/v14_sol_oos.js | tee v14_sol_oos_summary.txt
       - name: Run six-month replay
         run: node tools/v14_sol_6m_wrapper.mjs | tee v14_sol_6m_summary.txt
+      - name: Match volatility and replay closest market
+        run: node tools/compare_volatility_and_replay.mjs | tee volatility_v14_crossmarket_summary.txt
       - uses: actions/upload-artifact@v4
         with:
-          name: v14-sol-oos-replays
+          name: v14-crossmarket-research
           path: |
             v14_sol_oos_summary.txt
             v14_sol_oos_result.json
             v14_sol_6m_summary.txt
             v14_sol_6m_result.json
+            volatility_v14_crossmarket_summary.txt
+            volatility_v14_crossmarket_result.json
