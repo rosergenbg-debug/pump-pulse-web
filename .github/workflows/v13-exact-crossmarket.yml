@@ -1,0 +1,25 @@
+name: V13 exact 90b41 cross-market
+on:
+  push:
+    branches: ["research/v13-exact-90b41-crossmarket"]
+    paths:
+      - "research/PUMP_BEST_DIP_EXACT.json"
+      - "tools/v13_exact_config_crossmarket.mjs"
+      - ".github/workflows/v13-exact-crossmarket.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  replay:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run exact config replay
+        run: node tools/v13_exact_config_crossmarket.mjs | tee v13_exact_90b41_crossmarket_summary.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: v13-exact-90b41-crossmarket
+          path: |
+            v13_exact_90b41_crossmarket_summary.txt
+            v13_exact_90b41_crossmarket_result.json
